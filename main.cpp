@@ -1,174 +1,106 @@
 #include "mpi.h"
-#include <stdlib.h>
-#include <stdio.h>
-#include <math.h>
+#include <iostream>
+#include <assert.h>
 #include "locale"
 
-
-int new_log2(const int x)
+float *create_rand_nums(int num_elements) // Создание массива случайных чисел. 
 {
-	int y = x;
-	int i = 0;
-	while (y % 2 == 0)
+	float *rand_nums = new float[num_elements];
+	for (int i = 0; i < num_elements; i++)
+		rand_nums[i] = (rand() / (float)RAND_MAX);
+	return rand_nums;
+}
+
+int MY_MPI_Bcast_binominal_tree(void *buffer, int count, MPI_Datatype datatype, int root, MPI_Comm comm) // Реализация bcast через алгоритм биномиального дерева
+{
+	int proc_num, proc_rank;	// переменные для хранения ранга этого процесса и количества процессов
+	MPI_Status status;			// статус для MPI_Recv
+	int relative_rank;			// относительный ранг
+	int mask;					// маска
+	int src, dst;
+	MPI_Comm_size(MPI_COMM_WORLD, &proc_num);	
+	MPI_Comm_rank(MPI_COMM_WORLD, &proc_rank);	
+
+	if (proc_num == 1) return 0;
+	if (root <= proc_rank)
+		relative_rank = proc_rank - root;
+	else
+		relative_rank = proc_rank - root + proc_num;
+	mask = 0x1; // присваиваем переменной бинарное значение 1 
+	while (mask < proc_num)
 	{
-		i++;
-		y = y / 2;
+		if ((relative_rank & mask) != 0)
+		{
+
+			src = proc_rank - mask;
+			if (src < 0) src = src + proc_num;
+			MPI_Recv(buffer, count, datatype, src, 0, comm, &status);
+			break;
+		}
+		mask <<= 1;
 	}
-	if ((int)(pow(2, (float)(i))) == x)
+	mask >>= 1;
+	while (mask > 0)
 	{
-		return i;
+		if ((relative_rank + mask) < proc_num)
+		{
+			dst = proc_rank + mask;
+			if (dst >= proc_num) dst = dst - proc_num;
+			MPI_Send(buffer, count, datatype, dst, 0, comm);
+		}
+		mask >>= 1;
+	}
+	return 1;
+}
+
+int MY_MPI_Allreduce(const void *sendbuf, void *recvbuf, int count, MPI_Datatype datatype, MPI_Op op, MPI_Comm comm) // Реализация MPI_Allreduce
+{
+	int root = 0;
+	MPI_Reduce(sendbuf, recvbuf, count, datatype, op, root, comm); // Сбор данных от всех к одному
+	MY_MPI_Bcast_binominal_tree(recvbuf, count, datatype, root, comm); // Функция Bcast основанная на биноминальных деревьях
+	return 1;
+}
+
+
+int main(int argc, char* argv[])
+{
+	int num_elements_per_proc;	// количество элементов на процесс
+	int proc_num, proc_rank;	// переменные для хранения ранга этого процесса и количества процессов
+	float *rand_nums;			// указатель на буфер, в котором должны храниться сгенерированные числа
+	float local_sum;			// локальная сумма чисел	
+	float global_sum;			// глобальная сумма чисел
+	const int root = 0;			// корневой процесс root	
+	double start_time;			// время начала   
+	double end_time;			// время окончания 
+
+	MPI_Init(&argc, &argv);
+	MPI_Comm_size(MPI_COMM_WORLD, &proc_num);	
+	MPI_Comm_rank(MPI_COMM_WORLD, &proc_rank);	
+	if (argc == 2)
+	{
+		start_time = MPI_Wtime();
+		num_elements_per_proc = atoi(argv[1]);
+		srand(time(NULL)*proc_rank);   
+		rand_nums = new float[proc_num];
+		rand_nums = create_rand_nums(num_elements_per_proc);
+		local_sum = 0;
+		for (int i = 0; i < num_elements_per_proc; i++)	local_sum += rand_nums[i];
+		global_sum = 0;
+		MY_MPI_Allreduce(&local_sum, &global_sum, 1, MPI_FLOAT, MPI_SUM, MPI_COMM_WORLD);
+		printf("Process %d, local_sum=%f, local_avg=%f, global_sum=%f, global_avg=%f\n", proc_rank, local_sum, local_sum / num_elements_per_proc, global_sum, global_sum / (proc_num * num_elements_per_proc));
+		free(rand_nums);
 	}
 	else
 	{
-		return 0;
-	}
-}
-
-
-void new_sum(const void *a, void *a1, int n, MPI_Datatype t)
-{
-	int i;
-	if (t == MPI_INT)
-	{
-		for (i = 0; i<n; i++)
+		// Если аргументов нет или их больше 2 
+		if (proc_rank == root) 
 		{
-			((int *)a1)[i] = ((int *)a)[i] + ((int *)a1)[i];
+			printf("Enter: avg num_elements_per_proc\n");
 		}
 	}
-	if (t == MPI_FLOAT)
-	{
-		for (i = 0; i<n; i++)
-		{
-			((float *)a1)[i] = ((float *)a)[i] + ((float *)a1)[i];
-		}
-	}
-	if (t == MPI_DOUBLE)
-	{
-		for (i = 0; i<n; i++)
-		{
-			((double *)a1)[i] = ((double *)a)[i] + ((double *)a1)[i];
-		}
-	}
-}
-
-
-void new_min(const void *a, void *a1, int n, MPI_Datatype t)
-{
-	int i;
-	if (t == MPI_INT)
-	{
-		for (i = 0; i<n; i++)
-		{
-			if (((int *)a1)[i]>((int *)a)[i])
-			{
-				((int *)a1)[i] = ((int *)a)[i];
-			}
-		}
-	}
-	if (t == MPI_FLOAT)
-	{
-		for (i = 0; i<n; i++)
-		{
-			if (((float *)a1)[i]>((float *)a)[i])
-			{
-				((float *)a1)[i] = ((float *)a)[i];
-			}
-		}
-	}
-	if (t == MPI_DOUBLE)
-	{
-		for (i = 0; i<n; i++)
-		{
-			if (((double *)a1)[i]>((double *)a)[i])
-			{
-				((double *)a1)[i] = ((double *)a)[i];
-			}
-		}
-	}
-}
-
-int Tree_Allreduce(void* sendbuf, void* recvbuf, int count, int ProcRank, int ProcNum, MPI_Datatype datatype, MPI_Op op, MPI_Comm comm)
-{
-	int h;
-	h = (int)(log((float)ProcNum) / log(2.0));
-	if (new_log2(ProcNum) == 0) h++;
-	for (int i = 0; i < h; i++)
-	{
-		int j = 0;
-		while (j < ProcNum)
-		{
-			int k = j + pow(2, (float)(i));
-
-			if (k < ProcNum)
-			{
-				if (ProcRank == j)
-				{
-					MPI_Status status;
-					MPI_Recv(recvbuf, count, datatype, k, 0, MPI_COMM_WORLD, &status);
-					if (op == MPI_MIN) new_min(sendbuf, recvbuf, count, datatype);
-					if (op == MPI_SUM) new_sum(recvbuf, sendbuf, count, datatype);
-				}
-				if (ProcRank == k)
-				{
-					MPI_Send(sendbuf, count, datatype, j, 0, MPI_COMM_WORLD);
-				}
-			}
-			j = j + pow(2, (float)(i + 1));
-		}
-	}
-	for (int i = 1 ; i < ProcNum; i++) 
-	{
-		for (int j = 0; j < i; j++) 
-		{
-			int tmp = 1;
-			for (int k = 1; k < i; k++) 
-			{
-				tmp = tmp * 2;
-			}
-			if (ProcRank == j) 
-			{
-				if ((tmp + j < ProcNum) && (tmp + j != 0)) 
-				{
-					MPI_Send(sendbuf, count, datatype, tmp + j, 0, comm);
-				}
-			}
-			if ((ProcRank == tmp + j) && (tmp + j < ProcNum) && (tmp + j != 0)) 
-			{
-				MPI_Status status;
-				MPI_Recv(sendbuf, count, datatype, j, 0, comm, &status);
-			}
-		}
-		MPI_Barrier(comm);
-	}
-	return 0;
-}
-
-int main(int argc, char *argv[])
-{
-	setlocale(LC_ALL, "Russian");
-	int ProcRank, ProcNum;
-	double TStart, TFinish;
-	MPI_Init(&argc, &argv);
-	MPI_Comm_size(MPI_COMM_WORLD, &ProcNum);
-	MPI_Comm_rank(MPI_COMM_WORLD, &ProcRank);
-	TStart = MPI_Wtime();
-	int *a = new int[100];
-	int *b = new int[100];
-	for (int i = 0; i < 100; i++)
-	{
-		a[i] = i;
-	}
-	for (int i = 0; i < 100; i++)
-	{
-		b[i] = 0;
-	}
-	Tree_Allreduce(a, b, 100, ProcRank, ProcNum, MPI_INT, MPI_SUM, MPI_COMM_WORLD);
-	for (int k = 0; k < 100; k++)
-		if (ProcRank == 1)
-		{
-			fprintf(stdout, "%d ", (int*)a[k]);
-			fflush(stdout);
-		}
-	TFinish = MPI_Wtime();
+	end_time = MPI_Wtime();
+	if (proc_rank == root)
+		printf("\nTime spent: %lf\n", end_time - start_time);
 	MPI_Finalize();
+	return 0;
 }
