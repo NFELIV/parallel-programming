@@ -1,7 +1,6 @@
 // №13 Сортировка Хоара с простым слиянием 
 // ЛР#1 Последовательная реализация
 
-#include "stdafx.h"
 #include <iostream>
 #include <stdlib.h>
 #include <omp.h>
@@ -9,7 +8,7 @@
 
 using namespace std;
 
-void CreateArray(double arr[], int lenght) //Генерация 
+void CreateArray(int arr[], int lenght) //Генерация 
 {
 	srand((unsigned int)time(NULL));
 	for (int i = 0; i < lenght; i++)
@@ -18,7 +17,7 @@ void CreateArray(double arr[], int lenght) //Генерация
 	}
 }
 
-void PrintArray(double* arr, int size) //Печать 
+void PrintArray(int* arr, int size) //Печать 
 {
 	if (size < 20)
 	{
@@ -30,7 +29,7 @@ void PrintArray(double* arr, int size) //Печать
 	return;
 }
 
-void QuickSort(double* arr, int l, int r) //Сортировка
+void QuickSort(int* arr, int l, int r) //Сортировка
 {
 	int i = l, j = r;
 	double m = arr[(r + l) / 2];
@@ -69,11 +68,17 @@ void QuickSort(double* arr, int l, int r) //Сортировка
 
 int main(int argc, char * argv[]) 
 {
-	double size;
-	double array[100000];
+	int size = 10000;
 	double time = 0;
-	cout << "Enter num's element's in array: ";
-	cin >> size;
+	if (argc == 2)
+	{
+		size = atoi(argv[1]);
+	}
+	else if (argc != 2)
+	{
+		cout << "Error! Only the number of elements in the array is needed" << endl;
+	}
+	int* array = new int[size];
 	CreateArray(array, size);
 	cout << "The Generated array: ";
 	PrintArray(array, size);
@@ -86,5 +91,6 @@ int main(int argc, char * argv[])
 	cout << endl;
 	cout << "Sequence version time: " << time << endl;
 	delete[] array;
+	system("pause");
 	return 0;
 }
