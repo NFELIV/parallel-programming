@@ -215,6 +215,7 @@ int main(int argc, char** argv)
 		cout << "Sorted arrays are equal!" << endl;
 		cout << "Parallel version time: " << (finish_parallel_time - start_parallel_time).seconds() << endl;
 		cout << "Sequence version time: " << (finish_sequence_time - start_sequence_time).seconds() << endl;
+	}
 	delete[] array;
 	delete[] sequence_sorted_array;
 	delete[] parallel_sorted_array;
