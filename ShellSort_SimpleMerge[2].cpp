@@ -1,236 +1,312 @@
 Глотов Н.С ЛР№2 Cортировка Хоара с простым слиянием. OMP
 // №13 Сортировка Хоара с простым слиянием 
 // ЛР#2 Реализация OMP
-#include <iostream>
+
+#include "stdafx.h"
 #include <omp.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <math.h>
-#include <ctime>
+#include <iostream>
+#include <time.h>
+#include <queue>
 
 using namespace std;
 
-void CreateArray(int arr[], int lenght) //Генерация 
+struct part
 {
-	srand((unsigned int)time(NULL));
-	for (int i = 0; i < lenght; i++)
-	{
-		arr[i] = rand() % 10;
-	}
-}
+	int* array;
+	unsigned size;
+};
 
-void PrintArray(int* arr, int size) //Печать 
+int* merge(int* a, int* b, int n, int m)
 {
-	if (size < 20)
-	{
-		for (int i = 0; i < size; i++)
-		{
-			cout << arr[i] << " ";
-		}
-	}
-	return;
-}
-
-void QuickSort(int* arr, int l, int r) //Быстрая сортировка для последовательной реализации
-{
-	int i = l, j = r;
-	double m = arr[(r + l) / 2];
-	double temp = 0;
-	while (i <= j)
-	{
-		while (arr[i] < m)
-		{
-			i++;
-		}
-		while (arr[j] > m)
-		{
-			j--;
-		}
-		if (i <= j)
-		{
-			if (i < j)
-			{
-				temp = arr[i];
-				arr[i] = arr[j];
-				arr[j] = temp;
-			}
-			i++;
-			j--;
-		}
-	}
-	if (j > l)
-	{
-		QuickSort(arr, l, j);
-	}
-	if (r > i)
-	{
-		QuickSort(arr, i, r);
-	}
-}
-/*  
-first_subarray_size - длина первого подмассива 
-second_subarray_size - длина второго подмассива
-first_subarray_start_index - начальный индекс первого подмассива
-second_subarray_start_index - начальный индекс второго подмассива */
-void Merge(int* array, const int first_subarray_size, const int second_subarray_size, const int first_subarray_start_index, const int second_subarray_start_index) 
-{
+	int* c;
+	int size = n + m;
+	c = new int[size];
 	int i = 0, j = 0, k = 0;
-	int* merged_subarray = new int[first_subarray_size + second_subarray_size];
-
-	while (i < first_subarray_size && j < second_subarray_size) 
+	while (i < n && j < m)
 	{
-		if (array[first_subarray_start_index + i] <= array[second_subarray_start_index + j]) 
+		if (a[i] <= b[j])
 		{
-			merged_subarray[k] = array[first_subarray_start_index + i];
+			c[k] = a[i];
 			i++;
 		}
-		else 
+		else
 		{
-			merged_subarray[k] = array[second_subarray_start_index + j];
+			c[k] = b[j];
 			j++;
 		}
 		k++;
 	}
-
-	if (i < first_subarray_size)
+	while (i < n)
 	{
-		for (int p = i; p < first_subarray_size; p++) 
-		{
-			merged_subarray[k] = array[first_subarray_start_index + p];
-			k++;
-		}
+		c[k] = a[i];
+		k++;
+		i++;
 	}
-	else 
+	while (j < m)
 	{
-		for (int p = j; p < second_subarray_size; p++) 
-		{
-			merged_subarray[k] = array[second_subarray_start_index + p];
-			k++;
-		}
+		c[k] = b[j];
+		k++;
+		j++;
 	}
-
-	for (i = first_subarray_start_index; i < second_subarray_start_index + second_subarray_size; i++) // Копируем объединенный массив в исходный массив
-	{
-		array[i] = merged_subarray[i - first_subarray_start_index];
-	}
-
-	delete[] merged_subarray;
+	return c;
 }
 
-void ParallelQuickSort(int* array, const int size, const int threads)
+void swap(int* a, int* b)
 {
-	omp_set_num_threads(threads);
-	int subarray_size = size / threads;
-#pragma omp parallel for schedule(static) shared(array)
-	for (int i = 0; i < threads; i++)
-	{
-		int low = i * subarray_size;
-		int high = 0;
-		if (i == threads - 1 && size % threads) {
-			high = size - 1;
-		}
-		else
-		{
-			high = low + subarray_size - 1;
-		}
+	int t = *a;
+	*a = *b;
+	*b = t;
+}
 
-		QuickSort(array, low, high);
+int partition(int arr[], int low, int high)
+{
+	int pivot = arr[high];
+	int i = (low - 1);
+	for (int j = low; j <= high - 1; j++)
+	{
+		if (arr[j] < pivot)
+		{
+			i++;
+			swap(&arr[i], &arr[j]);
+		}
 	}
-	int step = 1; //Расстояние между объединяющими 
-	for (int i = threads / 2; i > 0; i /= 2)
+	swap(&arr[i + 1], &arr[high]);
+	return (i + 1);
+}
+
+void quickSort(int arr[], int low, int high)
+{
+	if (low < high)
 	{
-		int first_subarray_size = subarray_size * step;
-		int second_subarray_size = first_subarray_size;
-
-		// Обработка оставшихся элементов массива во время последней итерации
-		if (i / 2 <= 0)
-		{
-			second_subarray_size += size % threads;
-		}
-
-#pragma omp parallel for schedule(static) \
-    shared(array, first_subarray_size, second_subarray_size, step)
-		for (int j = 0; j < i; j++)
-		{
-			int thread_id = omp_get_thread_num();
-			int first_subarray_start_index =
-				thread_id * subarray_size * step * 2;
-			int second_subarray_start_index =
-				first_subarray_start_index + subarray_size * step;
-			Merge(array, first_subarray_size, second_subarray_size, first_subarray_start_index, second_subarray_start_index);
-		}
-		step *= 2;
+		int pi = partition(arr, low, high);
+		quickSort(arr, low, pi - 1);
+		quickSort(arr, pi + 1, high);
 	}
 }
-int main(int argc, char** argv) 
+
+
+int* parallel_merge(int numtasks, part* parts)
 {
-	int size = 10000; 
-	int threads = omp_get_max_threads();
-	int* sequence_sorted_array = new int[size]; // Массив для последовательной версии
-	int* parallel_sorted_array = new int[size]; // Массив для параллельной версии
-	int notCorrect = 0; //Счетчик корректности
-	double sequence_time = 0, start_sequence_time = 0, start_parallel_time = 0; 
-	double parallel_time = 0, finish_sequence_time = 0, finish_parallel_time = 0;
-	if (argc == 3) 
+	if (numtasks == 2)
 	{
-		size = atoi(argv[1]);
-		threads = atoi(argv[2]);
+		return merge(parts[0].array, parts[1].array, parts[0].size, parts[1].size);
 	}
-	else 
+	else if (numtasks == 3)
 	{
-		cout << "Error!" << endl << "Two arguments must be entered: [1] - size array, [2] - threads..." << endl;
+		return merge(parts[2].array, merge(parts[0].array, parts[1].array, parts[0].size, parts[1].size),
+			parts[2].size, parts[0].size + parts[1].size);
 	}
-	int* array = new int[size]; // Исходный массив
-	CreateArray(array, size);
-	cout << "The Generated array: ";
-	PrintArray(array, size);
-	cout << endl;
-	for (int i = 0; i < size; i++)
+	else if (numtasks < 2) return nullptr;
+
+	int current_parts = numtasks / 2 + numtasks % 2;
+	part* sorted_parts = new part[current_parts];
+	int _numtasks = numtasks;
+	int _current_parts = current_parts;
+	int part_size = parts[0].size;
+	for (size_t i = 0; i < numtasks / 2; i++)
 	{
-		sequence_sorted_array[i] = array[i];
-		parallel_sorted_array[i] = array[i];
+		sorted_parts[i].array = new int[part_size * 2];
+		sorted_parts[i].size = part_size * 2;
 	}
-        //Параллельная реализация
-	start_parallel_time = omp_get_wtime();
-	ParallelQuickSort(parallel_sorted_array, size, threads);
-	finish_parallel_time = omp_get_wtime();
-	parallel_time = finish_parallel_time - start_parallel_time;
-	//
-	//Последовательная рализация
-	start_sequence_time = omp_get_wtime();
-	QuickSort(sequence_sorted_array, 0, size - 1);
-	finish_sequence_time = omp_get_wtime();
-	sequence_time = finish_sequence_time - start_sequence_time;
-	//
-	double* equal = new double[size];
-	for (int i = 0; i < size; i++) //проверка на правильность
+	if (numtasks % 2)
 	{
-		equal[i] = sequence_sorted_array[i] - parallel_sorted_array[i];
-		if (equal[i] != 0.0) 
+		sorted_parts[current_parts - 1].size = parts[numtasks - 1].size;
+		sorted_parts[current_parts - 1].array = new int[sorted_parts[current_parts - 1].size];
+		for (size_t i = 0; i < sorted_parts[current_parts - 1].size; i++)
 		{
-			notCorrect++;
+			sorted_parts[current_parts - 1].array[i] = parts[numtasks - 1].array[i];
+		}
+		_numtasks--;
+		_current_parts--;
+	}
+
+	omp_set_num_threads(_current_parts);
+#pragma omp parallel shared(_current_parts)
+	{
+		int taskid = omp_get_thread_num();
+		int part_id = ((taskid + 1) * 2) - 1;
+		sorted_parts[taskid].array = merge(parts[part_id].array, parts[part_id - 1].array, parts[part_id].size, parts[part_id - 1].size);
+	}
+	for (size_t i = 0; i < numtasks; i++)
+	{
+		delete[] parts[i].array;
+	}
+	return parallel_merge(current_parts, sorted_parts);
+}
+
+int main(int argc, char** argv)
+{
+	int* start_array = nullptr;
+	int* sorted_start_array = nullptr;
+	int* array = nullptr;
+	int* remainder_array = nullptr;
+	int* result_array = nullptr;
+	clock_t start;
+	clock_t end;
+	clock_t start_single;
+	clock_t end_single;
+	int numtasks;
+	int size;
+	int remainder = 0;
+	int** parts;
+	if (argc == 3)
+	{
+		numtasks = atoi(argv[1]);
+		size = atoi(argv[2]);
+	}
+	else
+	{
+		{
+			cout << "Error! Only the number of elements in the array is needed" << endl; cout << "Error!" << endl << "Two arguments must be entered: [1] - size array, [2] - threads..." << endl;
+			return 0;
 		}
 	}
-	if (notCorrect > 0) 
+	start_array = new int[size];
+	sorted_start_array = new int[size];
+
+	for (size_t i = 0; i < size; i++)
 	{
-		cout << "Sorted arrays are not equal!" << endl;
+		start_array[i] = rand() % 1000;
 	}
-	else 
+	for (size_t i = 0; i < size; i++)
 	{
-		cout << "Parallel sorted array: ";
-		PrintArray(parallel_sorted_array, size);
-		cout << endl;
-		cout << "Sequence sorted array: ";
-		PrintArray(sequence_sorted_array, size);
-		cout << endl;
-		cout << "Sorted arrays are equal!" << endl;
-		cout << "Parallel version time: " << parallel_time << endl;
-		cout << "Sequence version time: " << sequence_time << endl;
-		cout << "Boost: " << sequence_time / parallel_time << endl;
+		sorted_start_array[i] = start_array[i];
 	}
+	start_single = clock();
+	quickSort(sorted_start_array, 0, size - 1);
+	end_single = clock();
+	remainder = size % numtasks;
+	size = size - remainder;
+	array = new int[size];
+	if (remainder)
+	{
+		remainder_array = new int[remainder];
+	}
+	int i = 0;
+	for (; i < size; i++)
+	{
+		array[i] = start_array[i];
+	}
+	for (int j = 0; j < remainder; j++, i++)
+	{
+		remainder_array[j] = start_array[i];
+	}
+	if (remainder > 1)
+	{
+		quickSort(remainder_array, 0, remainder - 1);
+	}
+	delete[] start_array;
+	int part_size = size / numtasks;
+	parts = new int*[numtasks];
+	for (size_t i = 0; i < numtasks; i++)
+	{
+		parts[i] = new int[part_size];
+		int shift = i * part_size;
+		for (int j = 0; j < part_size; j++)
+		{
+			parts[i][j] = array[j + shift];
+		}
+	}
+	omp_set_num_threads(numtasks);
+#pragma omp parallel shared(numtasks)
+	{
+		int taskid = omp_get_thread_num();
+#pragma omp single
+		{
+			start = clock();
+		}
+		quickSort(parts[taskid], 0, part_size - 1);
+	}
+	if (numtasks == 2)
+	{
+		if (remainder)
+		{
+			result_array = merge(remainder_array, merge(parts[0], parts[1], part_size, part_size), remainder, size);
+			size += remainder;
+		}
+		else result_array = merge(parts[0], parts[1], part_size, part_size);
+	}
+	else if (numtasks == 3)
+	{
+		if (remainder)
+		{
+			result_array = merge(remainder_array, merge(parts[2], merge(parts[0], parts[1], part_size, part_size),
+				part_size, part_size + part_size), remainder, size);
+			size += remainder;
+		}
+		else result_array = merge(parts[2], merge(parts[0], parts[1], part_size, part_size), part_size, part_size + part_size);
+	}
+	else if (numtasks < 2)
+	{
+		result_array = parts[0];
+	}
+	else
+	{
+		int current_parts = numtasks / 2 + numtasks % 2;
+		part* sorted_parts = new part[current_parts];
+		int _numtasks = numtasks;
+		int _current_parts = current_parts;
+		for (size_t i = 0; i < numtasks / 2; i++)
+		{
+			sorted_parts[i].array = new int[part_size * 2];
+			sorted_parts[i].size = part_size * 2;
+		}
+		if (numtasks % 2)
+		{
+			sorted_parts[current_parts - 1].size = part_size;
+			sorted_parts[current_parts - 1].array = new int[part_size];
+			for (size_t i = 0; i < part_size; i++)
+			{
+				sorted_parts[current_parts - 1].array[i] = parts[numtasks - 1][i];
+			}
+
+			_numtasks--;
+			_current_parts--;
+		}
+
+		omp_set_num_threads(_current_parts);
+#pragma omp parallel shared(_current_parts)
+		{
+			int taskid = omp_get_thread_num();
+			int part_id = ((taskid + 1) * 2) - 1;
+
+			sorted_parts[taskid].array = merge(parts[part_id], parts[part_id - 1], part_size, part_size);
+
+		}
+		for (size_t i = 0; i < numtasks; i++)
+		{
+			delete[] parts[i];
+		}
+		delete[] parts;
+		if (remainder)
+		{
+			result_array = merge(remainder_array, parallel_merge(current_parts, sorted_parts), remainder, size);
+			size += remainder;
+		}
+		else result_array = parallel_merge(current_parts, sorted_parts);
+	}
+	end = clock();
+	bool same = true;
+	for (size_t i = 0; i < size; i++)
+	{
+		if (sorted_start_array[i] != result_array[i])
+		{
+			same = false;
+			break;
+		}
+
+	}
+	cout << "Arrays check: ";
+	if (same) cout << "PASS!" << endl;
+	else cout << "ERROR!" << endl;
+	double seconds_single = (double)(end_single - start_single) / CLOCKS_PER_SEC;
+	cout << "The time of single thread quick sort " << seconds_single << " seconds." << endl;
+	double seconds = (double)(end - start) / CLOCKS_PER_SEC;
+	cout << "The time of " << numtasks << "x threads quick sort " << seconds << " seconds." << endl;
+	cout << endl << "Result: " << seconds_single / seconds << "x acceleration" << endl;
+	delete[] sorted_start_array;
 	delete[] array;
-	delete[] sequence_sorted_array;
-	delete[] parallel_sorted_array;
-	system("pause");
+	delete[] remainder_array;
+	delete[] result_array;
 	return 0;
 }
